@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="classic">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Gesture-Controlled Rock Paper Scissors — Play RPS using your webcam! AI detects your hand gestures in real-time using MediaPipe." />
+  <title>🎮 Rock Paper Scissors — Gesture Control</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✊</text></svg>" />
+</head>
+<body>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loading-text">Initializing AI Engine...</div>
+  </div>
+
+  <!-- Confetti Overlay -->
+  <div class="celebration-overlay" id="celebration-overlay"></div>
+
+  <!-- Round End Modal -->
+  <div class="modal-overlay" id="round-modal">
+    <div class="modal-card glass-card">
+      <div class="modal-title" id="modal-title">ROUND 1 COMPLETE</div>
+      <div class="modal-subtitle" id="modal-subtitle">🎉 You won this round!</div>
+
+      <div class="modal-scores">
+        <div class="modal-score-block">
+          <div class="modal-score-value modal-score-player" id="modal-player-score">0</div>
+          <div class="modal-score-label">YOU</div>
+        </div>
+        <div class="modal-score-vs">VS</div>
+        <div class="modal-score-block">
+          <div class="modal-score-value modal-score-computer" id="modal-computer-score">0</div>
+          <div class="modal-score-label">CPU</div>
+        </div>
+      </div>
+
+      <div class="modal-round-dots" id="modal-round-dots">
+        <!-- R1 R2 R3 dots -->
+      </div>
+
+      <div class="modal-message" id="modal-message">Next: Round 2</div>
+
+      <button class="start-btn modal-btn" id="modal-btn">
+        <span id="modal-btn-text">START ROUND 2</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="app-container">
+
+    <!-- ===== Header ===== -->
+    <header class="game-header">
+      <h1 class="game-title">Rock  Paper  Scissors</h1>
+      <p class="game-subtitle">Gesture-Controlled • AI Powered • Best of 3 Rounds</p>
+    </header>
+
+    <!-- ===== Round Indicator Bar ===== -->
+    <div class="round-bar glass-card">
+      <div class="round-indicator" id="round-indicator">ROUND 1</div>
+      <div class="match-progress" id="match-progress">
+        <!-- 5 dots filled dynamically -->
+      </div>
+      <div class="round-scores-mini">
+        <span class="round-mini-label">Round Score:</span>
+        <span class="round-mini-player" id="round-score-player">0</span>
+        <span class="round-mini-sep">—</span>
+        <span class="round-mini-computer" id="round-score-computer">0</span>
+      </div>
+      <div class="round-dots" id="round-dots">
+        <!-- R1 R2 R3 indicators -->
+      </div>
+    </div>
+
+    <!-- ===== Controls Bar ===== -->
+    <div class="controls-bar">
+      <div class="control-group">
+        <span class="control-label">Theme</span>
+        <select class="control-select" id="theme-select">
+          <option value="classic">🎮 Classic</option>
+          <option value="naruto">🍥 Naruto</option>
+          <option value="marvel">🦸 Marvel</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <span class="control-label">AI Difficulty</span>
+        <select class="control-select" id="difficulty-select">
+          <option value="easy">😊 Easy</option>
+          <option value="medium" selected>🧠 Medium</option>
+          <option value="hard">🔥 Hard</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <button class="control-btn sound-toggle" id="sound-toggle" title="Toggle Sound">🔊</button>
+      </div>
+    </div>
+
+    <!-- ===== Main Game Arena ===== -->
+    <div class="game-arena">
+
+      <!-- Player Panel (Camera) -->
+      <div class="player-panel glass-card">
+        <div class="panel-title">
+          <span>📷</span> YOU
+        </div>
+        <div class="webcam-container" id="webcam-container">
+          <video id="webcam" autoplay playsinline muted></video>
+          <canvas id="canvas-overlay"></canvas>
+          <div class="gesture-label" id="gesture-label">No hand detected</div>
+        </div>
+        <div class="camera-status loading" id="camera-status">
+          ⏳ Loading hand detection...
+        </div>
+      </div>
+
+      <!-- Center Column -->
+      <div class="center-column">
+
+        <!-- Score (round score) -->
+        <div class="score-display glass-card">
+          <span class="score-value score-player" id="score-player">0</span>
+          <span class="score-separator">—</span>
+          <span class="score-value score-computer" id="score-computer">0</span>
+        </div>
+        <div class="score-labels">
+          <span class="score-label-text">You</span>
+          <span class="score-label-text">CPU</span>
+        </div>
+
+        <!-- Streak -->
+        <div class="streak-display glass-card" id="streak-display">
+          <div class="streak-count" id="streak-count">0</div>
+          <div class="streak-label">Win Streak</div>
+        </div>
+
+        <!-- Countdown -->
+        <div class="countdown-container">
+          <div class="countdown-ring" id="countdown-ring"></div>
+          <div class="countdown-text" id="countdown-text">GO</div>
+        </div>
+
+        <!-- Start Button -->
+        <button class="start-btn" id="start-btn">
+          ▶ Start Match
+        </button>
+
+        <!-- Result -->
+        <div class="result-banner glass-card" id="result-banner">
+          <div class="result-text" id="result-text"></div>
+          <div class="result-detail" id="result-detail"></div>
+        </div>
+
+        <!-- Round Counter -->
+        <div class="round-counter" id="round-counter">Round 1 • Match 1 of 5</div>
+      </div>
+
+      <!-- Computer Panel -->
+      <div class="computer-panel glass-card">
+        <div class="panel-title">
+          <span>🤖</span> OPPONENT
+        </div>
+        <div class="computer-hand-container">
+          <div class="computer-hand-emoji" id="computer-hand-emoji">❓</div>
+          <div class="computer-move-label" id="computer-move-label">Waiting...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===== History Log ===== -->
+    <div class="history-section glass-card">
+      <div class="history-title">Current Round Matches</div>
+      <div class="history-list" id="history-list">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="audio.js"></script>
+  <script src="game.js" type="module"></script>
+</body>
+</html>
