@@ -106,6 +106,7 @@ function cacheDom() {
     cameraStatus: document.getElementById('camera-status'),
     webcamContainer: document.getElementById('webcam-container'),
     opponentWebcam: document.getElementById('opponent-webcam'),
+    opponentCanvas: document.getElementById('opponent-canvas'),
     computerEmoji: document.getElementById('computer-hand-emoji'),
     computerMoveLabel: document.getElementById('computer-move-label'),
     scorePlayer: document.getElementById('score-player'),
@@ -290,7 +291,7 @@ function processResults(results) {
     const landmarks = results.landmarks[0];
     const handedness = results.handednesses?.[0]?.[0]?.categoryName || 'Right';
 
-    drawHandLandmarks(canvasCtx, landmarks);
+    drawHandLandmarks(canvasCtx, dom.canvas, landmarks);
 
     const gesture = classifyGesture(landmarks, handedness);
     state.currentGesture = gesture;
@@ -300,17 +301,25 @@ function processResults(results) {
     dom.gestureLabel.textContent = `${icon} ${gesture.toUpperCase()}`;
     dom.gestureLabel.classList.add('active');
     dom.webcamContainer.classList.add('detecting');
+
+    if (state.gameMode === 'multiplayer' && window.multiplayer && window.multiplayer.isConnected) {
+      window.multiplayer.send({ type: 'landmarks', landmarks });
+    }
   } else {
     state.currentGesture = 'none';
     dom.gestureLabel.textContent = 'No hand detected';
     dom.gestureLabel.classList.remove('active');
     dom.webcamContainer.classList.remove('detecting');
+
+    if (state.gameMode === 'multiplayer' && window.multiplayer && window.multiplayer.isConnected) {
+      window.multiplayer.send({ type: 'landmarks', landmarks: null });
+    }
   }
 }
 
-function drawHandLandmarks(ctx, landmarks) {
-  const w = dom.canvas.width;
-  const h = dom.canvas.height;
+function drawHandLandmarks(ctx, canvas, landmarks) {
+  const w = canvas.width;
+  const h = canvas.height;
 
   const connections = [
     [0,1],[1,2],[2,3],[3,4],
@@ -1077,6 +1086,7 @@ function setupMultiplayerCallbacks() {
   mp.onRemoteStream = (stream) => {
     dom.opponentWebcam.srcObject = stream;
     dom.opponentWebcam.classList.remove('hidden');
+    dom.opponentCanvas.classList.remove('hidden');
     dom.computerEmoji.classList.add('overlay-mode');
     dom.opponentWebcam.play().catch(e => console.error('[MP] Video play error:', e));
   };
@@ -1100,6 +1110,10 @@ function handleMultiplayerMessage(data) {
       }
       break;
 
+    case 'landmarks':
+      drawOpponentLandmarks(data.landmarks);
+      break;
+
     case 'next-round':
       // Guest: host advanced to next round
       dom.roundModal.classList.remove('visible');
@@ -1112,6 +1126,25 @@ function handleMultiplayerMessage(data) {
       resetTournament();
       showToast('🔄 Rematch!', 'info');
       break;
+  }
+}
+
+
+function drawOpponentLandmarks(landmarks) {
+  const canvas = dom.opponentCanvas;
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+
+  if (dom.opponentWebcam.videoWidth > 0 && canvas.width !== dom.opponentWebcam.videoWidth) {
+    canvas.width = dom.opponentWebcam.videoWidth;
+    canvas.height = dom.opponentWebcam.videoHeight;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (landmarks) {
+    drawHandLandmarks(ctx, canvas, landmarks);
   }
 }
 
@@ -1155,6 +1188,7 @@ function selectModeAI() {
 
   // Hide opponent webcam if switching back from multiplayer
   dom.opponentWebcam.classList.add('hidden');
+  dom.opponentCanvas.classList.add('hidden');
   dom.opponentWebcam.srcObject = null;
   dom.computerEmoji.classList.remove('overlay-mode');
 
