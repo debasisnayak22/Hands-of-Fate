@@ -11,6 +11,7 @@ class MultiplayerManager {
     this.onConnected = null;     // callback()
     this.onDisconnected = null;  // callback(reason)
     this.onError = null;         // callback(errorMsg)
+    this.onRemoteStream = null;  // callback(stream)
   }
 
   // Generate a random 6-char alphanumeric code
@@ -65,6 +66,16 @@ class MultiplayerManager {
       this.peer.on('disconnected', () => {
         console.log('[MP] Peer disconnected from signaling server');
       });
+
+      this.peer.on('call', (call) => {
+        console.log('[MP] Incoming video call from guest');
+        // Answer with our local stream if available
+        call.answer(window.localStream);
+        call.on('stream', (remoteStream) => {
+          console.log('[MP] Received guest video stream');
+          if (this.onRemoteStream) this.onRemoteStream(remoteStream);
+        });
+      });
     });
   }
 
@@ -103,6 +114,15 @@ class MultiplayerManager {
             this.destroy();
           }
         }, 10000);
+
+        // Initiate video call to host
+        if (window.localStream) {
+          const call = this.peer.call(this._peerId(this.roomCode), window.localStream);
+          call.on('stream', (remoteStream) => {
+            console.log('[MP] Received host video stream');
+            if (this.onRemoteStream) this.onRemoteStream(remoteStream);
+          });
+        }
       });
 
       this.peer.on('error', (err) => {

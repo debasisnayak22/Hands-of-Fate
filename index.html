@@ -270,7 +270,9 @@
           <div class="panel-title" id="opponent-panel-title">
             <span>🤖</span> <span id="opponent-name">OPPONENT</span>
           </div>
-          <div class="computer-hand-container">
+          <div class="computer-hand-container" id="opponent-webcam-container">
+            <!-- Appears in Multiplayer mode -->
+            <video id="opponent-webcam" autoplay playsinline class="hidden"></video>
             <div class="computer-hand-emoji" id="computer-hand-emoji">❓</div>
             <div class="computer-move-label" id="computer-move-label">Waiting...</div>
           </div>

@@ -105,6 +105,7 @@ function cacheDom() {
     gestureLabel: document.getElementById('gesture-label'),
     cameraStatus: document.getElementById('camera-status'),
     webcamContainer: document.getElementById('webcam-container'),
+    opponentWebcam: document.getElementById('opponent-webcam'),
     computerEmoji: document.getElementById('computer-hand-emoji'),
     computerMoveLabel: document.getElementById('computer-move-label'),
     scorePlayer: document.getElementById('score-player'),
@@ -242,6 +243,7 @@ async function startWebcam() {
       video: { width: 640, height: 480, facingMode: 'user' },
     });
     dom.webcam.srcObject = stream;
+    window.localStream = stream;
     await new Promise((resolve) => {
       dom.webcam.onloadedmetadata = () => {
         dom.webcam.play();
@@ -1071,6 +1073,12 @@ function setupMultiplayerCallbacks() {
   mp.onError = (msg) => {
     showToast(msg, 'error');
   };
+
+  mp.onRemoteStream = (stream) => {
+    dom.opponentWebcam.srcObject = stream;
+    dom.opponentWebcam.classList.remove('hidden');
+    dom.computerEmoji.classList.add('overlay-mode');
+  };
 }
 
 function handleMultiplayerMessage(data) {
@@ -1143,6 +1151,11 @@ function selectModeAI() {
   dom.difficultyGroup.classList.remove('hidden');
   dom.startBtn.textContent = '▶ Start Match';
   dom.startBtn.disabled = false;
+
+  // Hide opponent webcam if switching back from multiplayer
+  dom.opponentWebcam.classList.add('hidden');
+  dom.opponentWebcam.srcObject = null;
+  dom.computerEmoji.classList.remove('overlay-mode');
 
   showScreen('screen-game');
 }
