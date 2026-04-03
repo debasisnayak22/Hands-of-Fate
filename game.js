@@ -1,8 +1,8 @@
 // ===== Gesture-Controlled Rock Paper Scissors — Game Engine =====
-// ===== ROUND-BASED TOURNAMENT: Best of 3 Rounds, 5 Matches Each =====
+// ===== Supports: vs AI + Multiplayer (PeerJS) =====
 
 const MATCHES_PER_ROUND = 5;
-const ROUNDS_TO_WIN = 2; // Best of 3
+const ROUNDS_TO_WIN = 2;
 
 // --- Theme Definitions ---
 const THEMES = {
@@ -28,14 +28,17 @@ const THEMES = {
 
 // --- Game State ---
 const state = {
+  // Mode
+  gameMode: 'ai', // 'ai' or 'multiplayer'
+
   // Round-based tracking
   currentRound: 1,
-  matchInRound: 0,        // 0-5 (how many matches played in this round)
-  roundPlayerScore: 0,     // player points in current round
-  roundComputerScore: 0,   // computer points in current round
-  roundsWonPlayer: 0,      // rounds won by player
-  roundsWonComputer: 0,    // rounds won by computer
-  totalPlayerScore: 0,     // total score across all rounds
+  matchInRound: 0,
+  roundPlayerScore: 0,
+  roundComputerScore: 0,
+  roundsWonPlayer: 0,
+  roundsWonComputer: 0,
+  totalPlayerScore: 0,
   totalComputerScore: 0,
 
   // Streak
@@ -43,9 +46,9 @@ const state = {
   bestStreak: 0,
 
   // Match history
-  history: [],             // {player, computer, result, round, match}
-  roundHistory: [],        // current round's matches
-  moveHistory: [],         // last N player moves for AI
+  history: [],
+  roundHistory: [],
+  moveHistory: [],
 
   // Settings
   theme: 'classic',
@@ -62,6 +65,10 @@ const state = {
   webcamRunning: false,
   lastVideoTime: -1,
   animFrameId: null,
+
+  // Multiplayer-specific
+  opponentGesture: null,
+  waitingForOpponent: false,
 };
 
 // --- DOM References ---
@@ -69,6 +76,30 @@ let dom = {};
 
 function cacheDom() {
   dom = {
+    // Screens
+    screenModeSelect: document.getElementById('screen-mode-select'),
+    screenLobby: document.getElementById('screen-lobby'),
+    screenWaiting: document.getElementById('screen-waiting'),
+    screenGame: document.getElementById('screen-game'),
+
+    // Mode selection
+    btnModeAI: document.getElementById('btn-mode-ai'),
+    btnModeMulti: document.getElementById('btn-mode-multi'),
+
+    // Lobby
+    btnCreateRoom: document.getElementById('btn-create-room'),
+    btnJoinRoom: document.getElementById('btn-join-room'),
+    joinCodeInput: document.getElementById('join-code-input'),
+    joinError: document.getElementById('join-error'),
+    btnLobbyBack: document.getElementById('btn-lobby-back'),
+
+    // Waiting Room
+    roomCodeDisplay: document.getElementById('room-code-display'),
+    btnCopyCode: document.getElementById('btn-copy-code'),
+    btnCopyLink: document.getElementById('btn-copy-link'),
+    btnWaitingCancel: document.getElementById('btn-waiting-cancel'),
+
+    // Game elements
     webcam: document.getElementById('webcam'),
     canvas: document.getElementById('canvas-overlay'),
     gestureLabel: document.getElementById('gesture-label'),
@@ -82,7 +113,6 @@ function cacheDom() {
     streakDisplay: document.getElementById('streak-display'),
     countdownText: document.getElementById('countdown-text'),
     countdownRing: document.getElementById('countdown-ring'),
-    countdownContainer: document.getElementById('countdown-container'),
     startBtn: document.getElementById('start-btn'),
     resultBanner: document.getElementById('result-banner'),
     resultText: document.getElementById('result-text'),
@@ -96,21 +126,66 @@ function cacheDom() {
     historyList: document.getElementById('history-list'),
     themeSelect: document.getElementById('theme-select'),
     difficultySelect: document.getElementById('difficulty-select'),
+    difficultyGroup: document.getElementById('difficulty-group'),
     soundToggle: document.getElementById('sound-toggle'),
     loadingOverlay: document.getElementById('loading-overlay'),
     loadingText: document.getElementById('loading-text'),
     celebrationOverlay: document.getElementById('celebration-overlay'),
+    toastContainer: document.getElementById('toast-container'),
+
     // Modal
     roundModal: document.getElementById('round-modal'),
     modalTitle: document.getElementById('modal-title'),
     modalSubtitle: document.getElementById('modal-subtitle'),
     modalPlayerScore: document.getElementById('modal-player-score'),
     modalComputerScore: document.getElementById('modal-computer-score'),
+    modalOpponentLabel: document.getElementById('modal-opponent-label'),
     modalRoundDots: document.getElementById('modal-round-dots'),
     modalMessage: document.getElementById('modal-message'),
     modalBtn: document.getElementById('modal-btn'),
     modalBtnText: document.getElementById('modal-btn-text'),
+
+    // Disconnect modal
+    disconnectModal: document.getElementById('disconnect-modal'),
+    btnDisconnectBack: document.getElementById('btn-disconnect-back'),
+
+    // Multiplayer UI
+    gameSubtitle: document.getElementById('game-subtitle'),
+    connectionBadge: document.getElementById('connection-badge'),
+    opponentName: document.getElementById('opponent-name'),
+    opponentPanelTitle: document.getElementById('opponent-panel-title'),
+    opponentScoreLabel: document.getElementById('opponent-score-label'),
+    waitingOpponent: document.getElementById('waiting-opponent'),
+    btnBackToMenu: document.getElementById('btn-back-to-menu'),
   };
+}
+
+// =============================================================
+// SCREEN NAVIGATION
+// =============================================================
+
+function showScreen(screenId) {
+  [dom.screenModeSelect, dom.screenLobby, dom.screenWaiting, dom.screenGame]
+    .forEach(s => s.classList.add('hidden'));
+
+  const target = document.getElementById(screenId);
+  if (target) target.classList.remove('hidden');
+}
+
+// =============================================================
+// TOAST NOTIFICATIONS
+// =============================================================
+
+function showToast(message, type = 'info', duration = 3000) {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  dom.toastContainer.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('fade-out');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 
 // =============================================================
@@ -121,11 +196,10 @@ async function initHandLandmarker() {
   dom.loadingText.textContent = 'Loading AI Hand Detection Model...';
 
   try {
-    const { HandLandmarker, FilesetResolver, DrawingUtils } = await import(
+    const { HandLandmarker, FilesetResolver } = await import(
       'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs'
     );
 
-    window._DrawingUtils = DrawingUtils;
     window._HandLandmarker = HandLandmarker;
 
     const vision = await FilesetResolver.forVisionTasks(
@@ -275,7 +349,7 @@ function drawHandLandmarks(ctx, landmarks) {
 }
 
 // =============================================================
-// GESTURE CLASSIFICATION (Finger State Analysis)
+// GESTURE CLASSIFICATION
 // =============================================================
 
 function classifyGesture(landmarks, handedness) {
@@ -326,7 +400,6 @@ function getAIMove() {
     return moves[Math.floor(Math.random() * 3)];
   }
 
-  // HARD — Markov chain prediction
   if (state.moveHistory.length >= 3) {
     const transitions = {};
     for (let i = 0; i < state.moveHistory.length - 1; i++) {
@@ -373,10 +446,8 @@ function getResult(player, computer) {
 // =============================================================
 
 function updateRoundUI() {
-  // Round indicator text
   dom.roundIndicator.textContent = `ROUND ${state.currentRound}`;
 
-  // Match progress dots
   dom.matchProgress.innerHTML = '';
   for (let i = 0; i < MATCHES_PER_ROUND; i++) {
     const dot = document.createElement('div');
@@ -384,7 +455,6 @@ function updateRoundUI() {
     if (i < state.roundHistory.length) {
       const match = state.roundHistory[i];
       dot.classList.add(match.result);
-      const theme = THEMES[state.theme];
       dot.textContent = match.result === 'win' ? '✓' : match.result === 'lose' ? '✗' : '—';
     } else if (i === state.roundHistory.length) {
       dot.classList.add('current');
@@ -395,14 +465,11 @@ function updateRoundUI() {
     dom.matchProgress.appendChild(dot);
   }
 
-  // Round scores
   dom.roundScorePlayer.textContent = state.roundPlayerScore;
   dom.roundScoreComputer.textContent = state.roundComputerScore;
 
-  // Round dots (best of 3)
   updateRoundDots(dom.roundDots);
 
-  // Counter
   dom.roundCounter.textContent = `Round ${state.currentRound} • Match ${Math.min(state.matchInRound + 1, MATCHES_PER_ROUND)} of ${MATCHES_PER_ROUND}`;
 }
 
@@ -414,9 +481,7 @@ function updateRoundDots(container) {
     if (r === state.currentRound && !state.gameOver) {
       dot.classList.add('active');
     }
-    // Check if this round was won by someone
     if (r < state.currentRound || state.gameOver) {
-      // Determine who won this round from history
       const roundResult = getRoundResult(r);
       if (roundResult === 'player') dot.classList.add('won');
       else if (roundResult === 'computer') dot.classList.add('lost');
@@ -428,7 +493,6 @@ function updateRoundDots(container) {
 }
 
 function getRoundResult(roundNum) {
-  // Find matches for this round
   const roundMatches = state.history.filter(h => h.round === roundNum);
   if (roundMatches.length === 0) return null;
   const pWins = roundMatches.filter(h => h.result === 'win').length;
@@ -439,18 +503,38 @@ function getRoundResult(roundNum) {
 }
 
 // =============================================================
-// GAME FLOW — ROUND-BASED
+// GAME FLOW — MATCH
 // =============================================================
 
 async function startMatch() {
   if (state.isPlaying || state.isCountingDown || state.gameOver) return;
 
+  // In multiplayer, only host can start
+  if (state.gameMode === 'multiplayer') {
+    const mp = window.multiplayer;
+    if (mp.isHost) {
+      // Send countdown-start to guest
+      mp.send({ type: 'countdown-start' });
+    } else {
+      showToast('Wait for the host to start!', 'info');
+      return;
+    }
+  }
+
+  await runCountdownAndCapture();
+}
+
+// Called by both host and guest
+async function runCountdownAndCapture() {
   const audio = window.audioEngine;
   audio.init();
   audio.playClick();
 
   state.isCountingDown = true;
+  state.opponentGesture = null;
+  state.waitingForOpponent = false;
   dom.startBtn.disabled = true;
+  dom.waitingOpponent.classList.add('hidden');
 
   // Hide previous result
   dom.resultBanner.classList.remove('visible');
@@ -460,9 +544,9 @@ async function startMatch() {
   const theme = THEMES[state.theme];
   dom.computerEmoji.textContent = theme.waiting;
   dom.computerEmoji.className = 'computer-hand-emoji thinking';
-  dom.computerMoveLabel.textContent = 'Thinking...';
+  dom.computerMoveLabel.textContent = state.gameMode === 'multiplayer' ? 'Playing...' : 'Thinking...';
 
-  // Countdown: 3, 2, 1, SHOOT!
+  // Countdown
   dom.countdownRing.classList.add('active');
 
   for (let i = 3; i >= 1; i--) {
@@ -483,6 +567,10 @@ async function startMatch() {
   dom.countdownRing.classList.remove('active');
 
   if (playerMove === 'none') {
+    if (state.gameMode === 'multiplayer') {
+      // Send "none" gesture in multiplayer — auto-forfeit
+      window.multiplayer.send({ type: 'gesture', move: 'none' });
+    }
     dom.countdownText.textContent = '🤷';
     dom.computerEmoji.textContent = '😏';
     dom.computerEmoji.className = 'computer-hand-emoji reveal';
@@ -494,24 +582,81 @@ async function startMatch() {
     dom.resultDetail.textContent = 'Show Rock ✊, Paper ✋, or Scissors ✌️';
 
     audio.playLose();
-    dom.startBtn.disabled = false;
+
+    if (state.gameMode === 'ai') {
+      dom.startBtn.disabled = false;
+    }
     return;
   }
 
   // Lock gesture
   dom.webcamContainer.classList.add('gesture-locked');
 
-  // AI picks
-  const computerMove = getAIMove();
+  if (state.gameMode === 'ai') {
+    // === AI MODE ===
+    const computerMove = getAIMove();
+    await sleep(400);
+    revealAndScore(playerMove, computerMove);
+  } else {
+    // === MULTIPLAYER MODE ===
+    // Send our gesture to opponent
+    window.multiplayer.send({ type: 'gesture', move: playerMove });
 
-  // Reveal computer's hand
+    // Check if opponent's gesture already arrived
+    if (state.opponentGesture) {
+      await sleep(400);
+      revealAndScore(playerMove, state.opponentGesture);
+    } else {
+      // Wait for opponent's gesture
+      state.waitingForOpponent = true;
+      state.isPlaying = true;
+      dom.waitingOpponent.classList.remove('hidden');
+      dom.computerMoveLabel.textContent = 'Waiting...';
+
+      // Store our move to use when opponent's arrives
+      state._pendingPlayerMove = playerMove;
+
+      // Timeout after 15s
+      state._gestureTimeout = setTimeout(() => {
+        if (state.waitingForOpponent) {
+          state.waitingForOpponent = false;
+          state.isPlaying = false;
+          dom.waitingOpponent.classList.add('hidden');
+          showToast('Opponent took too long!', 'error');
+          dom.startBtn.disabled = false;
+          dom.countdownText.textContent = 'GO';
+        }
+      }, 15000);
+    }
+  }
+}
+
+async function revealAndScore(playerMove, opponentMove) {
+  const audio = window.audioEngine;
+  const theme = THEMES[state.theme];
+
+  state.waitingForOpponent = false;
+  state.isPlaying = false;
+  dom.waitingOpponent.classList.add('hidden');
+  if (state._gestureTimeout) clearTimeout(state._gestureTimeout);
+
+  // Handle opponent's "none" (forfeit)
+  if (opponentMove === 'none') {
+    dom.computerEmoji.textContent = '🤷';
+    dom.computerEmoji.className = 'computer-hand-emoji reveal';
+    dom.computerMoveLabel.textContent = 'No gesture!';
+    // Count as a win for us
+    opponentMove = playerMove === 'rock' ? 'scissors' : playerMove === 'paper' ? 'rock' : 'paper';
+  }
+
+  // Reveal opponent's hand
   await sleep(400);
-  dom.computerEmoji.textContent = theme.icons[computerMove];
+  dom.computerEmoji.textContent = theme.icons[opponentMove];
   dom.computerEmoji.className = 'computer-hand-emoji reveal';
-  dom.computerMoveLabel.textContent = computerMove.toUpperCase();
+  dom.computerMoveLabel.textContent = opponentMove.toUpperCase();
 
   // Determine result
-  const result = getResult(playerMove, computerMove);
+  const result = getResult(playerMove, opponentMove);
 
   // Update match in round
   state.matchInRound++;
@@ -520,7 +665,7 @@ async function startMatch() {
 
   const historyEntry = {
     player: playerMove,
-    computer: computerMove,
+    computer: opponentMove,
     result,
     round: state.currentRound,
     match: state.matchInRound
@@ -546,7 +691,7 @@ async function startMatch() {
   updateStreakUI();
   updateRoundUI();
   updateHistoryUI();
-  showMatchResult(result, playerMove, computerMove);
+  showMatchResult(result, playerMove, opponentMove);
 
   // Sound & visual effects
   if (result === 'win') {
@@ -564,7 +709,7 @@ async function startMatch() {
     dom.webcamContainer.classList.add('draw-glow');
   }
 
-  // Check if round is over (5 matches done)
+  // Check if round is over
   if (state.matchInRound >= MATCHES_PER_ROUND) {
     await sleep(1200);
     endRound();
@@ -573,7 +718,9 @@ async function startMatch() {
 
   // Re-enable start
   await sleep(500);
-  dom.startBtn.disabled = false;
+  if (state.gameMode === 'ai' || window.multiplayer.isHost) {
+    dom.startBtn.disabled = false;
+  }
   dom.countdownText.textContent = 'GO';
 }
 
@@ -582,9 +729,6 @@ async function startMatch() {
 // =============================================================
 
 function endRound() {
-  const audio = window.audioEngine;
-
-  // Determine round winner
   let roundWinner;
   if (state.roundPlayerScore > state.roundComputerScore) {
     roundWinner = 'player';
@@ -594,10 +738,8 @@ function endRound() {
     state.roundsWonComputer++;
   } else {
     roundWinner = 'draw';
-    // On draw, no one wins the round
   }
 
-  // Check if tournament is over
   const tournamentOver = (
     state.roundsWonPlayer >= ROUNDS_TO_WIN ||
     state.roundsWonComputer >= ROUNDS_TO_WIN ||
@@ -620,8 +762,10 @@ function endRound() {
 
 function showRoundEndModal(roundWinner) {
   const audio = window.audioEngine;
+  const oppLabel = state.gameMode === 'multiplayer' ? 'P2' : 'CPU';
 
   dom.modalTitle.textContent = `ROUND ${state.currentRound} COMPLETE`;
+  dom.modalOpponentLabel.textContent = oppLabel;
 
   if (roundWinner === 'player') {
     dom.modalSubtitle.textContent = '🎉 You won this round!';
@@ -629,7 +773,7 @@ function showRoundEndModal(roundWinner) {
     audio.playWin();
     spawnConfetti();
   } else if (roundWinner === 'computer') {
-    dom.modalSubtitle.textContent = '💀 CPU won this round!';
+    dom.modalSubtitle.textContent = `💀 ${oppLabel} won this round!`;
     dom.modalSubtitle.className = 'modal-subtitle lose';
     audio.playLose();
   } else {
@@ -640,37 +784,39 @@ function showRoundEndModal(roundWinner) {
 
   dom.modalPlayerScore.textContent = state.roundPlayerScore;
   dom.modalComputerScore.textContent = state.roundComputerScore;
-
-  // Update round dots in modal
   updateRoundDots(dom.modalRoundDots);
 
   const nextRound = state.currentRound + 1;
-  dom.modalMessage.textContent = `Rounds: You ${state.roundsWonPlayer} — CPU ${state.roundsWonComputer} • Next: Round ${nextRound}`;
-  dom.modalBtnText.textContent = `START ROUND ${nextRound}`;
+  dom.modalMessage.textContent = `Rounds: You ${state.roundsWonPlayer} — ${oppLabel} ${state.roundsWonComputer} • Next: Round ${nextRound}`;
+
+  if (state.gameMode === 'ai' || window.multiplayer.isHost) {
+    dom.modalBtnText.textContent = `START ROUND ${nextRound}`;
+    dom.modalBtn.style.display = '';
+  } else {
+    dom.modalBtnText.textContent = 'Waiting for host...';
+    dom.modalBtn.disabled = true;
+    dom.modalBtn.style.display = '';
+  }
 
   dom.roundModal.classList.add('visible');
 }
 
-function showTournamentEndModal(lastRoundWinner) {
+function showTournamentEndModal() {
   const audio = window.audioEngine;
+  const oppLabel = state.gameMode === 'multiplayer' ? 'P2' : 'CPU';
 
   dom.modalTitle.textContent = '🏆 TOURNAMENT OVER';
+  dom.modalOpponentLabel.textContent = oppLabel;
 
-  // Determine overall winner
   let overallWinner;
   if (state.roundsWonPlayer > state.roundsWonComputer) {
     overallWinner = 'player';
   } else if (state.roundsWonComputer > state.roundsWonPlayer) {
     overallWinner = 'computer';
   } else {
-    // If rounds are tied, compare total score
-    if (state.totalPlayerScore > state.totalComputerScore) {
-      overallWinner = 'player';
-    } else if (state.totalComputerScore > state.totalPlayerScore) {
-      overallWinner = 'computer';
-    } else {
-      overallWinner = 'draw';
-    }
+    if (state.totalPlayerScore > state.totalComputerScore) overallWinner = 'player';
+    else if (state.totalComputerScore > state.totalPlayerScore) overallWinner = 'computer';
+    else overallWinner = 'draw';
   }
 
   if (overallWinner === 'player') {
@@ -681,7 +827,7 @@ function showTournamentEndModal(lastRoundWinner) {
     setTimeout(() => spawnConfetti(), 500);
     setTimeout(() => spawnConfetti(), 1000);
   } else if (overallWinner === 'computer') {
-    dom.modalSubtitle.textContent = '💀 CPU WINS THE TOURNAMENT';
+    dom.modalSubtitle.textContent = `💀 ${oppLabel} WINS THE TOURNAMENT`;
     dom.modalSubtitle.className = 'modal-subtitle lose';
     audio.playLose();
   } else {
@@ -692,11 +838,12 @@ function showTournamentEndModal(lastRoundWinner) {
 
   dom.modalPlayerScore.textContent = state.totalPlayerScore;
   dom.modalComputerScore.textContent = state.totalComputerScore;
-
   updateRoundDots(dom.modalRoundDots);
 
-  dom.modalMessage.textContent = `Rounds Won: You ${state.roundsWonPlayer} — CPU ${state.roundsWonComputer} • Total Score: ${state.totalPlayerScore} - ${state.totalComputerScore}`;
+  dom.modalMessage.textContent = `Rounds Won: You ${state.roundsWonPlayer} — ${oppLabel} ${state.roundsWonComputer} • Total: ${state.totalPlayerScore} - ${state.totalComputerScore}`;
   dom.modalBtnText.textContent = '🔄 PLAY AGAIN';
+  dom.modalBtn.disabled = false;
+  dom.modalBtn.style.display = '';
 
   dom.roundModal.classList.add('visible');
 }
@@ -709,10 +856,14 @@ function handleModalBtn() {
   dom.roundModal.classList.remove('visible');
 
   if (state.gameOver) {
-    // Reset entire tournament
+    if (state.gameMode === 'multiplayer') {
+      window.multiplayer.send({ type: 'rematch' });
+    }
     resetTournament();
   } else {
-    // Start next round
+    if (state.gameMode === 'multiplayer' && window.multiplayer.isHost) {
+      window.multiplayer.send({ type: 'next-round' });
+    }
     startNextRound();
   }
 }
@@ -724,7 +875,6 @@ function startNextRound() {
   state.roundComputerScore = 0;
   state.roundHistory = [];
 
-  // Reset per-match UI
   dom.resultBanner.classList.remove('visible');
   dom.webcamContainer.classList.remove('win-glow', 'lose-glow', 'draw-glow', 'gesture-locked');
   const theme = THEMES[state.theme];
@@ -736,7 +886,9 @@ function startNextRound() {
   updateRoundUI();
   updateScoreUI(null);
 
-  dom.startBtn.disabled = false;
+  if (state.gameMode === 'ai' || window.multiplayer.isHost) {
+    dom.startBtn.disabled = false;
+  }
 }
 
 function resetTournament() {
@@ -768,7 +920,9 @@ function resetTournament() {
   updateStreakUI();
   updateHistoryUI();
 
-  dom.startBtn.disabled = false;
+  if (state.gameMode === 'ai' || window.multiplayer.isHost) {
+    dom.startBtn.disabled = false;
+  }
 }
 
 // =============================================================
@@ -791,11 +945,7 @@ function updateScoreUI(result) {
 function updateStreakUI() {
   if (state.streak > 0) {
     dom.streakCount.textContent = `🔥 ${state.streak}`;
-    if (state.streak >= 3) {
-      dom.streakDisplay.classList.add('on-fire');
-    } else {
-      dom.streakDisplay.classList.remove('on-fire');
-    }
+    dom.streakDisplay.classList.toggle('on-fire', state.streak >= 3);
   } else {
     dom.streakCount.textContent = '0';
     dom.streakDisplay.classList.remove('on-fire');
@@ -804,7 +954,6 @@ function updateStreakUI() {
 
 function updateHistoryUI() {
   dom.historyList.innerHTML = '';
-  // Show current round's history
   const recentHistory = [...state.roundHistory].reverse();
   recentHistory.forEach((entry) => {
     const theme = THEMES[state.theme];
@@ -892,6 +1041,210 @@ function toggleSound() {
 }
 
 // =============================================================
+// MULTIPLAYER — MESSAGE HANDLING
+// =============================================================
+
+function setupMultiplayerCallbacks() {
+  const mp = window.multiplayer;
+
+  mp.onConnected = () => {
+    showToast('🎉 Opponent connected!', 'success');
+    dom.connectionBadge.classList.remove('hidden', 'disconnected');
+    dom.connectionBadge.querySelector('.badge-text').textContent = 'Connected';
+
+    // Go to game screen
+    showScreen('screen-game');
+    setupMultiplayerUI();
+  };
+
+  mp.onDisconnected = (reason) => {
+    showToast('😞 Opponent disconnected', 'error');
+    dom.connectionBadge.classList.add('disconnected');
+    dom.connectionBadge.querySelector('.badge-text').textContent = 'Disconnected';
+    dom.disconnectModal.classList.add('visible');
+  };
+
+  mp.onMessage = (data) => {
+    handleMultiplayerMessage(data);
+  };
+
+  mp.onError = (msg) => {
+    showToast(msg, 'error');
+  };
+}
+
+function handleMultiplayerMessage(data) {
+  switch (data.type) {
+    case 'countdown-start':
+      // Guest receives: start the countdown
+      runCountdownAndCapture();
+      break;
+
+    case 'gesture':
+      // Received opponent's gesture
+      state.opponentGesture = data.move;
+
+      // If we were waiting for it
+      if (state.waitingForOpponent && state._pendingPlayerMove) {
+        revealAndScore(state._pendingPlayerMove, data.move);
+        state._pendingPlayerMove = null;
+      }
+      break;
+
+    case 'next-round':
+      // Guest: host advanced to next round
+      dom.roundModal.classList.remove('visible');
+      startNextRound();
+      break;
+
+    case 'rematch':
+      // Opponent wants rematch
+      dom.roundModal.classList.remove('visible');
+      resetTournament();
+      showToast('🔄 Rematch!', 'info');
+      break;
+  }
+}
+
+function setupMultiplayerUI() {
+  state.gameMode = 'multiplayer';
+
+  // Update labels
+  dom.gameSubtitle.textContent = `Multiplayer • Room: ${window.multiplayer.roomCode} • Best of 3 Rounds`;
+  dom.opponentName.textContent = 'PLAYER 2';
+  dom.opponentPanelTitle.querySelector('span').textContent = '👤';
+  dom.opponentScoreLabel.textContent = 'P2';
+  dom.connectionBadge.classList.remove('hidden');
+
+  // Hide AI difficulty, show it's multiplayer
+  dom.difficultyGroup.classList.add('hidden');
+
+  // Only host can start matches
+  if (!window.multiplayer.isHost) {
+    dom.startBtn.textContent = '⏳ Host starts match';
+    dom.startBtn.disabled = true;
+  } else {
+    dom.startBtn.textContent = '▶ Start Match';
+    dom.startBtn.disabled = false;
+  }
+}
+
+// =============================================================
+// MODE SELECTION & LOBBY FLOW
+// =============================================================
+
+function selectModeAI() {
+  state.gameMode = 'ai';
+  dom.gameSubtitle.textContent = 'Gesture-Controlled • AI Powered • Best of 3 Rounds';
+  dom.opponentName.textContent = 'OPPONENT';
+  dom.opponentPanelTitle.querySelector('span').textContent = '🤖';
+  dom.opponentScoreLabel.textContent = 'CPU';
+  dom.connectionBadge.classList.add('hidden');
+  dom.difficultyGroup.classList.remove('hidden');
+  dom.startBtn.textContent = '▶ Start Match';
+  dom.startBtn.disabled = false;
+
+  showScreen('screen-game');
+}
+
+function openLobby() {
+  showScreen('screen-lobby');
+  dom.joinCodeInput.value = '';
+  dom.joinError.classList.add('hidden');
+}
+
+async function handleCreateRoom() {
+  const mp = window.multiplayer;
+  setupMultiplayerCallbacks();
+
+  dom.btnCreateRoom.disabled = true;
+  dom.btnCreateRoom.textContent = 'Creating...';
+
+  try {
+    const code = await mp.createRoom();
+    dom.roomCodeDisplay.textContent = code;
+    showScreen('screen-waiting');
+  } catch (err) {
+    showToast('Failed to create room: ' + err, 'error');
+  } finally {
+    dom.btnCreateRoom.disabled = false;
+    dom.btnCreateRoom.textContent = 'Create Room';
+  }
+}
+
+async function handleJoinRoom() {
+  const code = dom.joinCodeInput.value.trim().toUpperCase();
+  if (code.length < 4) {
+    dom.joinError.textContent = 'Please enter a valid room code';
+    dom.joinError.classList.remove('hidden');
+    return;
+  }
+
+  const mp = window.multiplayer;
+  setupMultiplayerCallbacks();
+
+  dom.btnJoinRoom.disabled = true;
+  dom.btnJoinRoom.textContent = 'Joining...';
+  dom.joinError.classList.add('hidden');
+
+  try {
+    await mp.joinRoom(code);
+    // onConnected callback will switch to game screen
+  } catch (err) {
+    dom.joinError.textContent = typeof err === 'string' ? err : 'Failed to connect';
+    dom.joinError.classList.remove('hidden');
+  } finally {
+    dom.btnJoinRoom.disabled = false;
+    dom.btnJoinRoom.textContent = 'Join';
+  }
+}
+
+function handleCopyCode() {
+  const code = window.multiplayer.roomCode;
+  navigator.clipboard.writeText(code).then(() => {
+    dom.btnCopyCode.textContent = '✅ Copied!';
+    dom.btnCopyCode.classList.add('copied');
+    setTimeout(() => {
+      dom.btnCopyCode.textContent = '📋 Copy Code';
+      dom.btnCopyCode.classList.remove('copied');
+    }, 2000);
+  });
+}
+
+function handleCopyLink() {
+  const link = window.multiplayer.getShareLink();
+  navigator.clipboard.writeText(link).then(() => {
+    dom.btnCopyLink.textContent = '✅ Copied!';
+    dom.btnCopyLink.classList.add('copied');
+    setTimeout(() => {
+      dom.btnCopyLink.textContent = '🔗 Copy Link';
+      dom.btnCopyLink.classList.remove('copied');
+    }, 2000);
+  });
+}
+
+function handleWaitingCancel() {
+  window.multiplayer.destroy();
+  showScreen('screen-lobby');
+}
+
+function handleBackToMenu() {
+  if (state.gameMode === 'multiplayer') {
+    window.multiplayer.destroy();
+  }
+  state.gameMode = 'ai';
+  resetTournament();
+  showScreen('screen-mode-select');
+}
+
+function handleDisconnectBack() {
+  dom.disconnectModal.classList.remove('visible');
+  window.multiplayer.destroy();
+  resetTournament();
+  showScreen('screen-mode-select');
+}
+
+// =============================================================
 // UTILS
 // =============================================================
 
@@ -906,9 +1259,11 @@ function sleep(ms) {
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'Enter') {
     e.preventDefault();
-    if (dom.roundModal.classList.contains('visible')) {
+    if (dom.roundModal && dom.roundModal.classList.contains('visible')) {
       handleModalBtn();
-    } else {
+    } else if (dom.disconnectModal && dom.disconnectModal.classList.contains('visible')) {
+      handleDisconnectBack();
+    } else if (!dom.screenGame.classList.contains('hidden')) {
       startMatch();
     }
   }
@@ -921,12 +1276,39 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('DOMContentLoaded', () => {
   cacheDom();
 
-  // Event listeners
+  // Mode selection
+  dom.btnModeAI.addEventListener('click', selectModeAI);
+  dom.btnModeMulti.addEventListener('click', openLobby);
+
+  // Lobby
+  dom.btnCreateRoom.addEventListener('click', handleCreateRoom);
+  dom.btnJoinRoom.addEventListener('click', handleJoinRoom);
+  dom.btnLobbyBack.addEventListener('click', () => showScreen('screen-mode-select'));
+  dom.joinCodeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleJoinRoom();
+  });
+
+  // Waiting room
+  dom.btnCopyCode.addEventListener('click', handleCopyCode);
+  dom.btnCopyLink.addEventListener('click', handleCopyLink);
+  dom.btnWaitingCancel.addEventListener('click', handleWaitingCancel);
+
+  // Game
   dom.startBtn.addEventListener('click', startMatch);
   dom.themeSelect.addEventListener('change', (e) => setTheme(e.target.value));
   dom.difficultySelect.addEventListener('change', (e) => setDifficulty(e.target.value));
   dom.soundToggle.addEventListener('click', toggleSound);
   dom.modalBtn.addEventListener('click', handleModalBtn);
+  dom.btnBackToMenu.addEventListener('click', handleBackToMenu);
+  dom.btnDisconnectBack.addEventListener('click', handleDisconnectBack);
+
+  // Check URL for room code (shareable link)
+  const urlRoom = MultiplayerManager.getRoomFromURL();
+  if (urlRoom) {
+    showScreen('screen-lobby');
+    dom.joinCodeInput.value = urlRoom;
+    showToast('Room code detected! Click Join to connect.', 'info');
+  }
 
   // Init round UI
   updateRoundUI();

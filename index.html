@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Gesture-Controlled Rock Paper Scissors — Play RPS using your webcam! AI detects your hand gestures in real-time using MediaPipe." />
-  <title>🎮 Rock Paper Scissors — Gesture Control</title>
+  <meta name="description" content="Gesture-Controlled Rock Paper Scissors — Play RPS using your webcam! AI detects your hand gestures in real-time. Play vs AI or Multiplayer!" />
+  <title>🎮 Hands of Fate — Gesture RPS</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✊</text></svg>" />
+  <!-- PeerJS for multiplayer -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
 
@@ -19,168 +21,275 @@
   <!-- Confetti Overlay -->
   <div class="celebration-overlay" id="celebration-overlay"></div>
 
-  <!-- Round End Modal -->
-  <div class="modal-overlay" id="round-modal">
-    <div class="modal-card glass-card">
-      <div class="modal-title" id="modal-title">ROUND 1 COMPLETE</div>
-      <div class="modal-subtitle" id="modal-subtitle">🎉 You won this round!</div>
+  <!-- Notification Toast -->
+  <div class="toast-container" id="toast-container"></div>
 
-      <div class="modal-scores">
-        <div class="modal-score-block">
-          <div class="modal-score-value modal-score-player" id="modal-player-score">0</div>
-          <div class="modal-score-label">YOU</div>
-        </div>
-        <div class="modal-score-vs">VS</div>
-        <div class="modal-score-block">
-          <div class="modal-score-value modal-score-computer" id="modal-computer-score">0</div>
-          <div class="modal-score-label">CPU</div>
-        </div>
+  <!-- ============================================= -->
+  <!-- SCREEN 1: MODE SELECTION                      -->
+  <!-- ============================================= -->
+  <div class="screen screen-mode-select" id="screen-mode-select">
+    <div class="mode-content">
+      <h1 class="mode-main-title">Hands of Fate</h1>
+      <p class="mode-main-subtitle">Gesture-Controlled Rock Paper Scissors</p>
+
+      <div class="mode-cards">
+        <button class="mode-card" id="btn-mode-ai">
+          <div class="mode-card-icon">🤖</div>
+          <div class="mode-card-title">vs AI</div>
+          <div class="mode-card-desc">Play against a smart AI opponent with 3 difficulty levels</div>
+        </button>
+
+        <button class="mode-card" id="btn-mode-multi">
+          <div class="mode-card-icon">🌐</div>
+          <div class="mode-card-title">Multiplayer</div>
+          <div class="mode-card-desc">Play with a friend online — create or join a room</div>
+        </button>
       </div>
 
-      <div class="modal-round-dots" id="modal-round-dots">
-        <!-- R1 R2 R3 dots -->
+      <div class="mode-footer">
+        <p>✊ Rock &nbsp;•&nbsp; ✋ Paper &nbsp;•&nbsp; ✌️ Scissors &nbsp;•&nbsp; Show your hand to the camera!</p>
       </div>
-
-      <div class="modal-message" id="modal-message">Next: Round 2</div>
-
-      <button class="start-btn modal-btn" id="modal-btn">
-        <span id="modal-btn-text">START ROUND 2</span>
-      </button>
     </div>
   </div>
 
-  <div class="app-container">
+  <!-- ============================================= -->
+  <!-- SCREEN 2: MULTIPLAYER LOBBY                   -->
+  <!-- ============================================= -->
+  <div class="screen screen-lobby hidden" id="screen-lobby">
+    <div class="lobby-content">
+      <h2 class="lobby-title">🌐 Multiplayer</h2>
+      <p class="lobby-subtitle">Play with a friend in real-time</p>
 
-    <!-- ===== Header ===== -->
-    <header class="game-header">
-      <h1 class="game-title">Rock  Paper  Scissors</h1>
-      <p class="game-subtitle">Gesture-Controlled • AI Powered • Best of 3 Rounds</p>
-    </header>
+      <div class="lobby-cards">
+        <div class="lobby-card glass-card">
+          <div class="lobby-card-icon">🏠</div>
+          <h3 class="lobby-card-title">Create Room</h3>
+          <p class="lobby-card-desc">Start a new game and invite a friend</p>
+          <button class="start-btn lobby-btn" id="btn-create-room">Create Room</button>
+        </div>
 
-    <!-- ===== Round Indicator Bar ===== -->
-    <div class="round-bar glass-card">
-      <div class="round-indicator" id="round-indicator">ROUND 1</div>
-      <div class="match-progress" id="match-progress">
-        <!-- 5 dots filled dynamically -->
+        <div class="lobby-divider">OR</div>
+
+        <div class="lobby-card glass-card">
+          <div class="lobby-card-icon">🔗</div>
+          <h3 class="lobby-card-title">Join Room</h3>
+          <p class="lobby-card-desc">Enter a room code to join your friend</p>
+          <div class="join-input-group">
+            <input type="text" class="join-input" id="join-code-input"
+                   placeholder="Enter room code" maxlength="6"
+                   autocomplete="off" spellcheck="false" />
+            <button class="start-btn lobby-btn" id="btn-join-room">Join</button>
+          </div>
+          <div class="join-error hidden" id="join-error"></div>
+        </div>
       </div>
-      <div class="round-scores-mini">
-        <span class="round-mini-label">Round Score:</span>
-        <span class="round-mini-player" id="round-score-player">0</span>
-        <span class="round-mini-sep">—</span>
-        <span class="round-mini-computer" id="round-score-computer">0</span>
-      </div>
-      <div class="round-dots" id="round-dots">
-        <!-- R1 R2 R3 indicators -->
-      </div>
+
+      <button class="back-btn" id="btn-lobby-back">← Back</button>
     </div>
+  </div>
 
-    <!-- ===== Controls Bar ===== -->
-    <div class="controls-bar">
-      <div class="control-group">
-        <span class="control-label">Theme</span>
-        <select class="control-select" id="theme-select">
-          <option value="classic">🎮 Classic</option>
-          <option value="naruto">🍥 Naruto</option>
-          <option value="marvel">🦸 Marvel</option>
-        </select>
+  <!-- ============================================= -->
+  <!-- SCREEN 3: WAITING ROOM                        -->
+  <!-- ============================================= -->
+  <div class="screen screen-waiting hidden" id="screen-waiting">
+    <div class="waiting-content">
+      <div class="waiting-icon">⏳</div>
+      <h2 class="waiting-title">Waiting for Opponent</h2>
+
+      <div class="room-code-box glass-card">
+        <div class="room-code-label">Room Code</div>
+        <div class="room-code-display" id="room-code-display">------</div>
+        <div class="room-code-actions">
+          <button class="copy-btn" id="btn-copy-code">📋 Copy Code</button>
+          <button class="copy-btn" id="btn-copy-link">🔗 Copy Link</button>
+        </div>
       </div>
-      <div class="control-group">
-        <span class="control-label">AI Difficulty</span>
-        <select class="control-select" id="difficulty-select">
-          <option value="easy">😊 Easy</option>
-          <option value="medium" selected>🧠 Medium</option>
-          <option value="hard">🔥 Hard</option>
-        </select>
+
+      <p class="waiting-hint">Share this code with your friend to play together!</p>
+
+      <div class="waiting-dots">
+        <span class="dot-bounce"></span>
+        <span class="dot-bounce"></span>
+        <span class="dot-bounce"></span>
       </div>
-      <div class="control-group">
-        <button class="control-btn sound-toggle" id="sound-toggle" title="Toggle Sound">🔊</button>
-      </div>
+
+      <button class="back-btn" id="btn-waiting-cancel">← Cancel</button>
     </div>
+  </div>
 
-    <!-- ===== Main Game Arena ===== -->
-    <div class="game-arena">
+  <!-- ============================================= -->
+  <!-- SCREEN 4: GAME (Main Arena)                   -->
+  <!-- ============================================= -->
+  <div class="screen screen-game hidden" id="screen-game">
 
-      <!-- Player Panel (Camera) -->
-      <div class="player-panel glass-card">
-        <div class="panel-title">
-          <span>📷</span> YOU
+    <!-- Round End Modal -->
+    <div class="modal-overlay" id="round-modal">
+      <div class="modal-card glass-card">
+        <div class="modal-title" id="modal-title">ROUND 1 COMPLETE</div>
+        <div class="modal-subtitle" id="modal-subtitle">🎉 You won this round!</div>
+        <div class="modal-scores">
+          <div class="modal-score-block">
+            <div class="modal-score-value modal-score-player" id="modal-player-score">0</div>
+            <div class="modal-score-label">YOU</div>
+          </div>
+          <div class="modal-score-vs">VS</div>
+          <div class="modal-score-block">
+            <div class="modal-score-value modal-score-computer" id="modal-computer-score">0</div>
+            <div class="modal-score-label" id="modal-opponent-label">CPU</div>
+          </div>
         </div>
-        <div class="webcam-container" id="webcam-container">
-          <video id="webcam" autoplay playsinline muted></video>
-          <canvas id="canvas-overlay"></canvas>
-          <div class="gesture-label" id="gesture-label">No hand detected</div>
-        </div>
-        <div class="camera-status loading" id="camera-status">
-          ⏳ Loading hand detection...
-        </div>
-      </div>
-
-      <!-- Center Column -->
-      <div class="center-column">
-
-        <!-- Score (round score) -->
-        <div class="score-display glass-card">
-          <span class="score-value score-player" id="score-player">0</span>
-          <span class="score-separator">—</span>
-          <span class="score-value score-computer" id="score-computer">0</span>
-        </div>
-        <div class="score-labels">
-          <span class="score-label-text">You</span>
-          <span class="score-label-text">CPU</span>
-        </div>
-
-        <!-- Streak -->
-        <div class="streak-display glass-card" id="streak-display">
-          <div class="streak-count" id="streak-count">0</div>
-          <div class="streak-label">Win Streak</div>
-        </div>
-
-        <!-- Countdown -->
-        <div class="countdown-container">
-          <div class="countdown-ring" id="countdown-ring"></div>
-          <div class="countdown-text" id="countdown-text">GO</div>
-        </div>
-
-        <!-- Start Button -->
-        <button class="start-btn" id="start-btn">
-          ▶ Start Match
+        <div class="modal-round-dots" id="modal-round-dots"></div>
+        <div class="modal-message" id="modal-message">Next: Round 2</div>
+        <button class="start-btn modal-btn" id="modal-btn">
+          <span id="modal-btn-text">START ROUND 2</span>
         </button>
-
-        <!-- Result -->
-        <div class="result-banner glass-card" id="result-banner">
-          <div class="result-text" id="result-text"></div>
-          <div class="result-detail" id="result-detail"></div>
-        </div>
-
-        <!-- Round Counter -->
-        <div class="round-counter" id="round-counter">Round 1 • Match 1 of 5</div>
-      </div>
-
-      <!-- Computer Panel -->
-      <div class="computer-panel glass-card">
-        <div class="panel-title">
-          <span>🤖</span> OPPONENT
-        </div>
-        <div class="computer-hand-container">
-          <div class="computer-hand-emoji" id="computer-hand-emoji">❓</div>
-          <div class="computer-move-label" id="computer-move-label">Waiting...</div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ===== History Log ===== -->
-    <div class="history-section glass-card">
-      <div class="history-title">Current Round Matches</div>
-      <div class="history-list" id="history-list">
-        <!-- Populated dynamically -->
       </div>
     </div>
 
+    <!-- Disconnect Modal -->
+    <div class="modal-overlay" id="disconnect-modal">
+      <div class="modal-card glass-card">
+        <div class="modal-title">😞 Opponent Disconnected</div>
+        <div class="modal-subtitle lose" id="disconnect-reason">Your opponent has left the game.</div>
+        <button class="start-btn modal-btn" id="btn-disconnect-back">← Back to Menu</button>
+      </div>
+    </div>
+
+    <div class="app-container">
+
+      <!-- ===== Header ===== -->
+      <header class="game-header">
+        <h1 class="game-title">Hands of Fate</h1>
+        <p class="game-subtitle" id="game-subtitle">Gesture-Controlled • AI Powered • Best of 3 Rounds</p>
+        <!-- Connection badge for multiplayer -->
+        <div class="connection-badge hidden" id="connection-badge">
+          <span class="badge-dot"></span>
+          <span class="badge-text">Connected</span>
+        </div>
+      </header>
+
+      <!-- ===== Round Indicator Bar ===== -->
+      <div class="round-bar glass-card">
+        <div class="round-indicator" id="round-indicator">ROUND 1</div>
+        <div class="match-progress" id="match-progress"></div>
+        <div class="round-scores-mini">
+          <span class="round-mini-label">Round Score:</span>
+          <span class="round-mini-player" id="round-score-player">0</span>
+          <span class="round-mini-sep">—</span>
+          <span class="round-mini-computer" id="round-score-computer">0</span>
+        </div>
+        <div class="round-dots" id="round-dots"></div>
+      </div>
+
+      <!-- ===== Controls Bar ===== -->
+      <div class="controls-bar">
+        <div class="control-group">
+          <span class="control-label">Theme</span>
+          <select class="control-select" id="theme-select">
+            <option value="classic">🎮 Classic</option>
+            <option value="naruto">🍥 Naruto</option>
+            <option value="marvel">🦸 Marvel</option>
+          </select>
+        </div>
+        <div class="control-group" id="difficulty-group">
+          <span class="control-label">AI Difficulty</span>
+          <select class="control-select" id="difficulty-select">
+            <option value="easy">😊 Easy</option>
+            <option value="medium" selected>🧠 Medium</option>
+            <option value="hard">🔥 Hard</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <button class="control-btn sound-toggle" id="sound-toggle" title="Toggle Sound">🔊</button>
+        </div>
+        <div class="control-group">
+          <button class="control-btn back-to-menu-btn" id="btn-back-to-menu" title="Back to Menu">🏠</button>
+        </div>
+      </div>
+
+      <!-- ===== Main Game Arena ===== -->
+      <div class="game-arena">
+
+        <!-- Player Panel (Camera) -->
+        <div class="player-panel glass-card">
+          <div class="panel-title">
+            <span>📷</span> YOU
+          </div>
+          <div class="webcam-container" id="webcam-container">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="canvas-overlay"></canvas>
+            <div class="gesture-label" id="gesture-label">No hand detected</div>
+          </div>
+          <div class="camera-status loading" id="camera-status">
+            ⏳ Loading hand detection...
+          </div>
+        </div>
+
+        <!-- Center Column -->
+        <div class="center-column">
+          <div class="score-display glass-card">
+            <span class="score-value score-player" id="score-player">0</span>
+            <span class="score-separator">—</span>
+            <span class="score-value score-computer" id="score-computer">0</span>
+          </div>
+          <div class="score-labels">
+            <span class="score-label-text">You</span>
+            <span class="score-label-text" id="opponent-score-label">CPU</span>
+          </div>
+
+          <div class="streak-display glass-card" id="streak-display">
+            <div class="streak-count" id="streak-count">0</div>
+            <div class="streak-label">Win Streak</div>
+          </div>
+
+          <div class="countdown-container">
+            <div class="countdown-ring" id="countdown-ring"></div>
+            <div class="countdown-text" id="countdown-text">GO</div>
+          </div>
+
+          <button class="start-btn" id="start-btn">▶ Start Match</button>
+
+          <!-- Waiting for opponent indicator (multiplayer) -->
+          <div class="waiting-opponent hidden" id="waiting-opponent">
+            <div class="waiting-dots-inline">
+              <span class="dot-bounce"></span><span class="dot-bounce"></span><span class="dot-bounce"></span>
+            </div>
+            <span>Waiting for opponent's move...</span>
+          </div>
+
+          <div class="result-banner glass-card" id="result-banner">
+            <div class="result-text" id="result-text"></div>
+            <div class="result-detail" id="result-detail"></div>
+          </div>
+
+          <div class="round-counter" id="round-counter">Round 1 • Match 1 of 5</div>
+        </div>
+
+        <!-- Opponent Panel -->
+        <div class="computer-panel glass-card">
+          <div class="panel-title" id="opponent-panel-title">
+            <span>🤖</span> <span id="opponent-name">OPPONENT</span>
+          </div>
+          <div class="computer-hand-container">
+            <div class="computer-hand-emoji" id="computer-hand-emoji">❓</div>
+            <div class="computer-move-label" id="computer-move-label">Waiting...</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===== History Log ===== -->
+      <div class="history-section glass-card">
+        <div class="history-title">Current Round Matches</div>
+        <div class="history-list" id="history-list"></div>
+      </div>
+
+    </div>
   </div>
 
   <!-- Scripts -->
   <script src="audio.js"></script>
+  <script src="multiplayer.js"></script>
   <script src="game.js" type="module"></script>
 </body>
 </html>
