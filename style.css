@@ -1741,29 +1741,86 @@ body::before {
   border: 1px solid var(--bg-glass-border);
 }
 
-/* ===== Responsive for new screens ===== */
-@media (max-width: 640px) {
+/* ===== Responsive Design (Tablets & Mobile) ===== */
+@media (max-width: 900px) {
+  .game-arena {
+    gap: 12px;
+  }
+  
+  .glass-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 10px;
+  }
+  
+  .game-title {
+    font-size: 2.2rem;
+  }
+
+  .game-subtitle {
+    font-size: 0.8rem;
+    letter-spacing: 1px;
+  }
+
+  /* Core Game Reflow: Stack Everything Vertically */
+  .game-arena {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  /* Make Player/Opponent panels take full width and restrict height so all panels fit on screen */
+  .computer-hand-container,
+  .webcam-container {
+    max-width: 100%;
+    margin: 0 auto;
+    /* On mobile, prefer 16:9 or similar to save vertical space instead of tall 4:3 */
+    aspect-ratio: 16 / 9;
+  }
+  
+  .controls-bar {
+    flex-direction: column;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .round-bar {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    text-align: center;
+    justify-content: center;
+  }
+  
+  .match-progress, 
+  .round-dots {
+    justify-content: center;
+  }
+
+  /* Lobby Specific Tweaks */
   .mode-main-title {
-    font-size: 2.6rem;
+    font-size: 2.2rem;
   }
 
   .mode-card {
     width: 100%;
     max-width: 400px;
-    padding: 28px 24px;
+    padding: 24px 20px;
   }
 
   .mode-card-icon {
-    font-size: 3rem;
+    font-size: 2.5rem;
   }
 
   .lobby-title {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
   }
 
   .room-code-display {
-    font-size: 2.2rem;
-    letter-spacing: 8px;
+    font-size: 1.8rem;
+    letter-spacing: 6px;
   }
 
   .lobby-cards {
@@ -1772,6 +1829,26 @@ body::before {
   }
 
   .lobby-divider {
-    margin: 4px 0;
+    margin: 8px 0;
+  }
+  
+  .result-text {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-title {
+    font-size: 1.8rem;
+  }
+  
+  .computer-hand-emoji {
+    font-size: 4rem;
+  }
+  
+  .computer-hand-emoji.overlay-mode {
+    font-size: 3rem;
+    bottom: 10px;
+    right: 10px;
   }
 }
