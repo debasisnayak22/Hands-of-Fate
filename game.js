@@ -1078,6 +1078,7 @@ function setupMultiplayerCallbacks() {
     dom.opponentWebcam.srcObject = stream;
     dom.opponentWebcam.classList.remove('hidden');
     dom.computerEmoji.classList.add('overlay-mode');
+    dom.opponentWebcam.play().catch(e => console.error('[MP] Video play error:', e));
   };
 }
 

@@ -69,12 +69,20 @@ class MultiplayerManager {
 
       this.peer.on('call', (call) => {
         console.log('[MP] Incoming video call from guest');
-        // Answer with our local stream if available
-        call.answer(window.localStream);
-        call.on('stream', (remoteStream) => {
-          console.log('[MP] Received guest video stream');
-          if (this.onRemoteStream) this.onRemoteStream(remoteStream);
-        });
+        
+        const answerCall = () => {
+          if (window.localStream) {
+            call.answer(window.localStream);
+            call.on('stream', (remoteStream) => {
+              console.log('[MP] Received guest video stream');
+              if (this.onRemoteStream) this.onRemoteStream(remoteStream);
+            });
+          } else {
+            console.log('[MP] Camera not ready, waiting...');
+            setTimeout(answerCall, 500);
+          }
+        };
+        answerCall();
       });
     });
   }
@@ -116,13 +124,19 @@ class MultiplayerManager {
         }, 10000);
 
         // Initiate video call to host
-        if (window.localStream) {
-          const call = this.peer.call(this._peerId(this.roomCode), window.localStream);
-          call.on('stream', (remoteStream) => {
-            console.log('[MP] Received host video stream');
-            if (this.onRemoteStream) this.onRemoteStream(remoteStream);
-          });
-        }
+        const initiateCall = () => {
+          if (window.localStream) {
+            const call = this.peer.call(this._peerId(this.roomCode), window.localStream);
+            call.on('stream', (remoteStream) => {
+              console.log('[MP] Received host video stream');
+              if (this.onRemoteStream) this.onRemoteStream(remoteStream);
+            });
+          } else {
+            console.log('[MP] Camera not ready, waiting to call...');
+            setTimeout(initiateCall, 500);
+          }
+        };
+        initiateCall();
       });
 
       this.peer.on('error', (err) => {
